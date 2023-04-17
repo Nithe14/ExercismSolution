@@ -1,4 +1,3 @@
-//TODO!
 use kmp::kmp_find;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -10,26 +9,12 @@ pub enum Comparison {
 }
 
 pub fn sublist<T: PartialEq>(first_list: &[T], second_list: &[T]) -> Comparison {
-    if first_list == second_list {
-        return Comparison::Equal;
-    } else if first_list.is_empty() && !second_list.is_empty() {
-        return Comparison::Sublist;
-    } else if second_list.is_empty() && !first_list.is_empty() {
-        return Comparison::Superlist;
-    } else if first_list.len() < second_list.len() {
-        let result = kmp_find(first_list, second_list);
-        match result {
-            None => return Comparison::Unequal,
-            Some(_) => return Comparison::Sublist,
-        }
-    } else if first_list.len() > second_list.len() {
-        let result = kmp_find(second_list, first_list);
-        match result {
-            None => return Comparison::Unequal,
-            Some(_) => return Comparison::Superlist,
-        }
+    match (first_list, second_list) {
+        (a, b) if a == b => Comparison::Equal,
+        (a, _) if a.is_empty() => Comparison::Sublist,
+        (_, b) if b.is_empty() => Comparison::Superlist,
+        (a, b) if a.len() < b.len() && kmp_find(a, b).is_some() => Comparison::Sublist,
+        (a, b) if a.len() > b.len() && kmp_find(b, a).is_some() => Comparison::Superlist,
+        (_, _) => Comparison::Unequal,
     }
-
-    Comparison::Unequal
 }
-//TODO!
