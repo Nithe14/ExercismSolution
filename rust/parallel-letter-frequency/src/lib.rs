@@ -1,50 +1,39 @@
-//TODO!
-//parallel but slower then seq xD
-use std::cmp::max;
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use std::thread;
 
+//test bench_large_parallel   ... bench:     138,913 ns/iter (+/- 13,421)
+//test bench_large_sequential ... bench:     214,249 ns/iter (+/- 9,443)
+//I couldn't manage to make it faster for small and tiny inputs.
+//I guess that sequential is just better for small texts.
 pub fn frequency(input: &[&str], worker_count: usize) -> HashMap<char, usize> {
-    let mut char_map = HashMap::new();
     if input.is_empty() {
-        return char_map;
+        return HashMap::new();
     }
 
-    let chars: Vec<char> = input.join("").chars().collect::<Vec<char>>();
-    let chunk_size = max(chars.len() / worker_count, 1);
-    let chunks: Vec<Vec<char>> = chars
-        .chunks(chunk_size)
-        .map(|chunk| chunk.to_vec())
-        .collect();
-    let mut handles = Vec::with_capacity(chunks.len());
+    let chunk_size = (input.len() / worker_count).max(1);
+    let chunks = input.chunks(chunk_size).map(|c| c.join(""));
+    let char_map = Arc::new(Mutex::new(HashMap::with_capacity(chunk_size)));
 
-    for chunk in chunks {
-        let handle = thread::spawn(move || {
-            let map = count_in_chunk(chunk);
-            map
-        });
-        handles.push(handle);
-    }
+    thread::scope(|s| {
+        for chunk in chunks {
+            let char_map = Arc::clone(&char_map);
+            s.spawn(move || {
+                let mut map = HashMap::new();
+                chunk
+                    .chars()
+                    .filter(|c| c.is_alphabetic())
+                    .map(|c| c.to_ascii_lowercase())
+                    .for_each(|c| *map.entry(c).or_insert(0) += 1);
 
-    for handle in handles {
-        let map = handle.join().unwrap();
-        for (k, v) in map {
-            *char_map.entry(k).or_insert(0) += v
-        }
-    }
-
-    char_map
-}
-
-fn count_in_chunk(input: Vec<char>) -> HashMap<char, usize> {
-    let mut map = HashMap::new();
-    input.iter().for_each(|c| {
-        if c.is_alphabetic() {
-            let lower_c = c.to_lowercase().to_string().chars().nth(0).unwrap();
-            *map.entry(lower_c).or_insert(0) += 1;
+                //lock after counting the current chunk
+                let mut final_map = char_map.lock().unwrap();
+                for (key, value) in map {
+                    *final_map.entry(key).or_insert(0) += value;
+                }
+            });
         }
     });
-    map
-}
 
-//TODO!
+    Arc::try_unwrap(char_map).unwrap().into_inner().unwrap()
+}
